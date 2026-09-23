@@ -431,7 +431,16 @@ function setMeta({title,description,type='website',jsonLd=null,noindex=false,ima
   /* Hash URLs are not ideal SEO URLs; canonical is kept deterministic and based on the configured domain. */
   canon.href=pageCanonical();
   document.querySelectorAll('script[data-portal-jsonld]').forEach(x=>x.remove());
-  if(jsonLd){const el=document.createElement('script');el.type='application/ld+json';el.dataset.portalJsonld='1';el.textContent=JSON.stringify(jsonLd);document.head.appendChild(el)}
+  if(jsonLd){
+    const el=document.createElement('script');
+    el.type='application/ld+json';
+    el.dataset.portalJsonld='1';
+    /* Cloudflare injects a CSP nonce into executable scripts. Reuse it for runtime JSON-LD. */
+    const nonceSource=document.querySelector('script[nonce]');
+    if(nonceSource?.nonce) el.setAttribute('nonce',nonceSource.nonce);
+    el.textContent=JSON.stringify(jsonLd);
+    document.head.appendChild(el);
+  }
 }
 function personJsonLd(){const s=currentSettings();const person={'@type':'Person','@id':siteBaseUrl()+'#person',name:s.author_name||'Ahmet Ali Ünal',jobTitle:s.profession||'Stajyer Avukat',url:siteBaseUrl()+'#hakkimda'};if(s.linkedin)person.sameAs=[safeUrl(s.linkedin)].filter(Boolean);return person;}
 function baseJsonLd(){const s=currentSettings();return {'@context':'https://schema.org','@graph':[{'@type':'WebSite','@id':siteBaseUrl()+'#website',name:siteName(),url:siteBaseUrl(),inLanguage:'tr-TR',publisher:{'@id':siteBaseUrl()+'#person'}},personJsonLd()]};}
@@ -746,7 +755,24 @@ async function runLiveSystemTest(){
     await run('Anonim güvenlik sınırı','RLS',async()=>{const anon=window.supabase.createClient(CONFIG.SUPABASE_URL,CONFIG.SUPABASE_PUBLISHABLE_KEY,{auth:{persistSession:false,autoRefreshToken:false}});const {data:pub,error}=await withTimeout(anon.from(CONFIG.TABLES.articles).select('id,status').limit(100),15000);if(error)throw error;if((pub||[]).some(x=>x.status!=='published'))throw new Error('Anonim kullanıcı taslak/yayın dışı makale okuyabiliyor.');const probe={title:`${stamp} anonymous`,slug:`${stamp.toLowerCase()}-anon`,content:'RLS testi',status:'draft'};const ins=await withTimeout(anon.from(CONFIG.TABLES.articles).insert(probe).select().maybeSingle(),15000);if(!ins.error){if(ins.data?.id)cleanup.push({table:CONFIG.TABLES.articles,id:ins.data.id});throw new Error('Anonim kullanıcı taslak makale oluşturabildi; RLS INSERT engeli yok.');}return 'Anonim okuma yalnızca yayınlanmış içerikte; anonim taslak INSERT reddedildi.';},'articles SELECT/INSERT RLS politikaları incelenmeli.');
     await run('Özellik merkezi kalıcı ayarı','Yönetilebilirlik',async()=>{let {data,error}=await withTimeout(sb.from(CONFIG.TABLES.home).select('id,settings').eq('section_key','site_chrome').limit(1),15000);if(error)throw error;let x=data?.[0],created=false;if(!x){const ins=await withTimeout(sb.from(CONFIG.TABLES.home).insert({section_key:'site_chrome',title:'Site Arayüzü',is_visible:true,sort_order:999,settings:{header_visible:true,footer_visible:true,features:{}}}).select().single(),15000);if(ins.error)throw ins.error;x=ins.data;created=true;}const original=x.settings||{};snapshots.push({id:x.id,settings:original});const next={...original,features:{...(original.features||{}),header:false}};const up=await withTimeout(sb.from(CONFIG.TABLES.home).update({settings:next,updated_at:new Date().toISOString()}).eq('id',x.id).select('settings').single(),15000);if(up.error)throw up.error;if(up.data?.settings?.features?.header!==false)throw new Error('Özellik kapatma kalıcı olarak doğrulanamadı.');const restore=await withTimeout(sb.from(CONFIG.TABLES.home).update({settings:original,updated_at:new Date().toISOString()}).eq('id',x.id),15000);if(restore.error)throw restore.error;snapshots.splice(snapshots.findIndex(s=>String(s.id)===String(x.id)),1);if(created){cleanup.push({table:CONFIG.TABLES.home,id:x.id});const del=await withTimeout(sb.from(CONFIG.TABLES.home).delete().eq('id',x.id),15000);if(del.error)throw del.error;cleanup.splice(cleanup.findIndex(s=>s.table===CONFIG.TABLES.home&&String(s.id)===String(x.id)),1);}return 'Özellik kapatıldı, veritabanında doğrulandı ve önceki ayar anında geri yüklendi.';},'homepage_sections içindeki site_chrome ayarı veya admin RLS UPDATE kontrol edilmeli.');
     await run('Yerel tarayıcı depolaması','Frontend runtime',async()=>{const key='portal-live-test-temp';const old=localStorage.getItem(key);localStorage.setItem(key,'ok');if(localStorage.getItem(key)!=='ok')throw new Error('localStorage yaz/oku başarısız.');if(old===null)localStorage.removeItem(key);else localStorage.setItem(key,old);return 'Geçici anahtar yazıldı, okundu ve önceki durum geri getirildi.';},'Tarayıcı gizli mod/Storage politikası veya kota kısıtı olabilir.');
-    await run('SEO runtime','Frontend runtime',async()=>{const canonical=document.querySelector('link[rel="canonical"]')?.href;const jsonld=document.querySelector('script[data-portal-jsonld]');if(!document.title.trim())throw new Error('document.title boş.');if(!canonical)throw new Error('canonical link bulunamadı.');if(!jsonld)throw new Error('JSON-LD bulunamadı.');return 'title + canonical + JSON-LD mevcut.';},'Route render veya SEO metadata üretimi kontrol edilmeli.');
+    await run('SEO runtime','Frontend runtime',async()=>{
+      const beforeTitle=document.title;
+      const beforeRobots=document.querySelector('meta[name="robots"]')?.content||'';
+      const beforeCanonical=document.querySelector('link[rel="canonical"]')?.href||'';
+      if(!beforeTitle.trim())throw new Error('document.title boş.');
+      if(!beforeCanonical)throw new Error('canonical link bulunamadı.');
+      /* The live test itself runs inside /admin, where JSON-LD is intentionally omitted.
+         Exercise the same public-page metadata path instead of requiring structured data on an admin page. */
+      setMeta({title:'SEO canlı test',description:'Kamuya açık SEO yapılandırılmış veri testi.',jsonLd:baseJsonLd(),noindex:true});
+      const jsonld=document.querySelector('script[data-portal-jsonld]');
+      if(!jsonld)throw new Error('Public JSON-LD üretilemedi.');
+      let parsed;try{parsed=JSON.parse(jsonld.textContent||'');}catch(e){throw new Error('JSON-LD geçerli JSON değil.');}
+      if(!parsed || !parsed['@context'])throw new Error('JSON-LD şeması geçersiz.');
+      setMeta({title:beforeTitle,description:'',jsonLd:null,noindex:true});
+      const robots=document.querySelector('meta[name="robots"]');if(robots)robots.content=beforeRobots;
+      const canon=document.querySelector('link[rel="canonical"]');if(canon)canon.href=beforeCanonical;
+      return 'title + canonical + public JSON-LD üretimi mevcut.';
+    },'Public route SEO metadata üretimi veya CSP nonce ayarı kontrol edilmeli.');
     await run('PWA kaynakları','Frontend runtime',async()=>{for(const path of ['/manifest.webmanifest','/sw.js']){const r=await fetch(path,{cache:'no-store'});if(!r.ok)throw new Error(`${path} HTTP ${r.status}`);}return 'Manifest ve service worker kaynakları erişilebilir.';},'Cloudflare Assets içine PWA dosyalarının dahil edildiğini kontrol edin.');
     skip('Telegram gerçek mesaj gönderimi','Dış servis','Güvenli testte gerçek Telegram mesajı gönderilmedi.','Mesaj gönderimi geri alınamaz dış yan etki oluşturur; Telegram panelindeki manuel test düğmesiyle ayrıca doğrulanabilir.');
     skip('Gemini gerçek çağrısı','Dış servis','AI çağrısı yapılmadı; kota/ücret ve içerik yan etkisi oluşturulmadı.','Gemini anahtarı yapılandırılmışsa AI panelinden kontrollü bir test yapılabilir.');
