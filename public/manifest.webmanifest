@@ -1,0 +1,11 @@
+{
+  "name": "Ahmet Ali Ünal — Hukuk Portalı",
+  "short_name": "Hukuk Portalı",
+  "lang": "tr-TR",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#070C18",
+  "theme_color": "#070C18",
+  "description": "Hukuk, içtihat, sözlük ve araştırma portalı."
+}
