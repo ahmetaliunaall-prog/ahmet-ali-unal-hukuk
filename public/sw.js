@@ -1,5 +1,5 @@
 const CACHE_PREFIX = 'hukuk-portal-';
-const CACHE_NAME = `${CACHE_PREFIX}2026-09-23-v2`;
+const CACHE_NAME = `${CACHE_PREFIX}2026-09-23-v3`;
 const APP_SHELL = ['/', '/index.html', '/manifest.webmanifest'];
 const DYNAMIC_PATHS = new Set(['/healthz', '/robots.txt', '/sitemap.xml', '/feed.xml']);
 

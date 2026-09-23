@@ -67,6 +67,9 @@ test('separate experience layers share app services and add toolbar actions only
   assert.match(html, /items\.filter\(\(\[key,action\]\)=>f\[key\]&&!dock\.querySelector/);
   assert.match(html, /data-action="save-note"/);
   assert.match(html, /function collectionItem\(key\)/);
+  assert.match(html, /\['citation_scan','Atıf bulucu'/);
+  assert.match(html, /\['print_download','Yazdır \/ PDF'/);
+  assert.match(html, /Object\.keys\(featureMap\(\)\)\.length>=FEATURE_CATALOG\.length/);
 });
 
 test('admin live test safely probes a real Supabase contact insert and cleanup', async () => {
@@ -95,6 +98,48 @@ test('live SEO check uses the public page and integrations are probed without si
   assert.match(html, /sb\.functions\.invoke\(CONFIG\.AI_FUNCTION/);
   assert.doesNotMatch(html, /skip\('Telegram gerçek mesaj gönderimi'/);
   assert.doesNotMatch(html, /skip\('Gemini gerçek çağrısı'/);
+});
+
+test('legal citation finder identifies Turkish statute and decision references', async () => {
+  const html = await readFile(new URL('../public/index.html', import.meta.url), 'utf8');
+  const serviceWorker = await readFile(new URL('../public/sw.js', import.meta.url), 'utf8');
+  const start = html.indexOf('function citationCandidates(source){');
+  const end = html.indexOf('function scanCitations(){', start);
+  assert.ok(start >= 0 && end > start, 'expected the pure citation matcher');
+  const context = {};
+  vm.runInNewContext(`${html.slice(start, end)};globalThis.scan=citationCandidates`, context);
+  const result = context.scan('6098 sayılı Türk Borçlar Kanunu\'nun 344. maddesi ve TBK m. 138 uygulanır. Yargıtay 3. Hukuk Dairesi, E. 2022/123, K. 2023/456. Ayrıca §§ 1, 2.');
+  const citations = result.map(item => item.citation);
+  assert.ok(citations.some(item => /6098 sayılı Türk Borçlar Kanunu/.test(item)));
+  assert.ok(citations.some(item => /TBK m\. 138/.test(item)));
+  assert.ok(citations.some(item => /Yargıtay.*E\. 2022\/123.*K\. 2023\/456/.test(item)));
+  assert.ok(citations.some(item => /§§ 1, 2/.test(item)));
+  assert.match(html, /data-action="scan-citations"/);
+  assert.match(html, /data-action="print-article"/);
+  assert.match(html, /https:\/\/karararama\.yargitay\.gov\.tr\/index/);
+  assert.match(html, /Resmî Yargıtay karar aramasını aç/);
+  assert.match(html, /let initInFlight=false,initRunId=0/);
+  assert.match(html, /Site verileri zamanında yanıt vermedi/);
+  assert.match(serviceWorker, /const CACHE_NAME = `\$\{CACHE_PREFIX\}2026-09-23-v3`/);
+  assert.match(html, /@media print/);
+  assert.match(html, /c\?\.court,c\?\.chamber,c\?\.decision_number/);
+  assert.match(html, /dateLabel\(c\?\.decision_date\)/);
+});
+
+test('Yargıtay citation action opens the official case-search portal', async () => {
+  const html = await readFile(new URL('../public/index.html', import.meta.url), 'utf8');
+  const matcherStart = html.indexOf('function citationCandidates(source){');
+  const start = html.indexOf('function scanCitations(){');
+  const end = html.indexOf('function preferredSource(){', start);
+  assert.ok(matcherStart >= 0 && start > matcherStart && end > start, 'expected the citation matcher and renderer');
+  const context = {
+    document: { querySelector: () => ({ innerText: 'Yargıtay 3. Hukuk Dairesi E. 2022/123 K. 2023/456' }) },
+    esc: value => String(value), openModal: value => { context.modal = value; }, window: {}
+  };
+  vm.runInNewContext(`${html.slice(matcherStart, end)};scanCitations()`, context);
+  assert.match(context.modal, /https:\/\/karararama\.yargitay\.gov\.tr\/index/);
+  assert.match(context.modal, /Resmî Yargıtay karar aramasını aç/);
+  assert.match(context.modal, /Yukarıdaki atfı kopyalayıp arama alanına yapıştırın/);
 });
 
 test('PWA manifest includes valid 192 and 512 pixel install icons', async () => {
