@@ -69,6 +69,18 @@ test('separate experience layers share app services and add toolbar actions only
   assert.match(html, /function collectionItem\(key\)/);
 });
 
+test('admin live test safely probes a real Supabase contact insert and cleanup', async () => {
+  const html = await readFile(new URL('../public/index.html', import.meta.url), 'utf8');
+  assert.match(html, /async function insertContactMessage\(client,data\)/);
+  assert.match(html, /İletişim formu Supabase testi/);
+  assert.match(html, /anonymousClient\.from\(CONFIG\.TABLES\.contact\)\.select\('id'\)/);
+  assert.match(html, /Portalın Telegram bildirimi çağrılmaz/);
+  assert.match(html, /AI ve dış mesaj gönderimleri otomatik yapılmaz/);
+  assert.match(html, /else if\(item\.filters&&Object\.keys\(item\.filters\)\.length\)/);
+  assert.match(html, /JSON\.stringify\(x\.filters\|\|\{\}\)/);
+  assert.match(html, /anonymousClient\.from\(CONFIG\.TABLES\.articles\)\.insert\(probe\)/);
+});
+
 test('PWA manifest includes valid 192 and 512 pixel install icons', async () => {
   const manifest = JSON.parse(await readFile(new URL('../public/manifest.webmanifest', import.meta.url), 'utf8'));
   const icons = manifest.icons || [];
@@ -83,6 +95,15 @@ test('PWA manifest includes valid 192 and 512 pixel install icons', async () => 
   }
   const serviceWorker = await readFile(new URL('../public/sw.js', import.meta.url), 'utf8');
   new vm.Script(serviceWorker, { filename: 'public/sw.js' });
+});
+
+test('GitHub automatically runs the test suite on pushes and pull requests', async () => {
+  const workflow = await readFile(new URL('../.github/workflows/test.yml', import.meta.url), 'utf8');
+  const runner = await readFile(new URL('../TESTI-CALISTIR.bat', import.meta.url), 'utf8');
+  assert.match(workflow, /push:/);
+  assert.match(workflow, /pull_request:/);
+  assert.match(workflow, /run: npm test/);
+  assert.match(runner, /call npm test/i);
 });
 
 test('health endpoint reports the Worker without pretending to probe Supabase', async () => {
