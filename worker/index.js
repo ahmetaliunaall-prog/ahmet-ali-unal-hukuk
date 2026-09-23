@@ -107,6 +107,8 @@ export default {
     }
     const cache = caches.default;
     const cacheable = request.method === 'GET' && ['/', '/index.html'].includes(url.pathname);
+    /* Cache only the raw static asset. CSP nonce is generated per request, so a nonce-bearing HTML response
+       must never be stored in the shared cache and replayed with a different CSP header. */
     if(cacheable){
       const hit = await cache.match(request);
       if(hit) return htmlWithSecurity(hit);
@@ -116,7 +118,6 @@ export default {
       response = await env.ASSETS.fetch(new Request(new URL('/index.html', request.url), request));
     }
     if(cacheable && response.ok){
-      // Cache yalnızca ham asset'i tutar. CSP nonce her istekte yeniden üretilir.
       ctx.waitUntil(cache.put(request, response.clone()));
     }
     return htmlWithSecurity(response);
