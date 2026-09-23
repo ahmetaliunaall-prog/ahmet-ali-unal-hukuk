@@ -1,5 +1,5 @@
 AHMET ALİ ÜNAL HUKUK PORTALI — CLOUDFLARE WORKERS
-Sürüm: 2.0.0
+Sürüm: 2.0.1
 
 MİMARİ
 - worker/index.js: HTTP uçları, HTML güvenlik başlıkları, RSS ve sitemap üretimi.

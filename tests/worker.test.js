@@ -142,6 +142,20 @@ test('Yargıtay citation action opens the official case-search portal', async ()
   assert.match(context.modal, /Yukarıdaki atfı kopyalayıp arama alanına yapıştırın/);
 });
 
+test('bulk article generation reserves unique slugs before insert', async () => {
+  const html = await readFile(new URL('../public/index.html', import.meta.url), 'utf8');
+  const start = html.indexOf('async function reserveUniqueArticleSlugs(rows){');
+  const end = html.indexOf('\nasync function runBulkAI(){', start);
+  assert.ok(start >= 0 && end > start, 'expected article slug reservation helper');
+  const context = {
+    CONFIG: { TABLES: { articles: 'articles' } },
+    sb: { from: () => ({ select: async () => ({ data: [{ slug: 'kira-hukuku' }, { slug: 'kira-hukuku-2' }], error: null }) }) },
+    text: value => String(value || ''), slugify: value => String(value).toLocaleLowerCase('tr-TR').replaceAll(' ', '-')
+  };
+  const result = await vm.runInNewContext(`${html.slice(start, end)};reserveUniqueArticleSlugs([{title:'Kira hukuku',slug:'kira-hukuku'},{title:'Kira hukuku',slug:'kira-hukuku'}])`, context);
+  assert.deepEqual(Array.from(result, row => row.slug), ['kira-hukuku-3', 'kira-hukuku-4']);
+});
+
 test('PWA manifest includes valid 192 and 512 pixel install icons', async () => {
   const manifest = JSON.parse(await readFile(new URL('../public/manifest.webmanifest', import.meta.url), 'utf8'));
   const icons = manifest.icons || [];
