@@ -107,13 +107,18 @@ export default {
     }
     const cache = caches.default;
     const cacheable = request.method === 'GET' && ['/', '/index.html'].includes(url.pathname);
-    if(cacheable){ const hit = await cache.match(request); if(hit) return htmlWithSecurity(hit); }
+    if(cacheable){
+      const hit = await cache.match(request);
+      if(hit) return htmlWithSecurity(hit);
+    }
     let response = await env.ASSETS.fetch(request);
     if (response.status === 404 && request.method === 'GET' && !url.pathname.includes('.')) {
       response = await env.ASSETS.fetch(new Request(new URL('/index.html', request.url), request));
     }
-    const secured = await htmlWithSecurity(response);
-    if(cacheable && secured.ok){ ctx.waitUntil(cache.put(request, secured.clone())); }
-    return secured;
+    if(cacheable && response.ok){
+      // Cache yalnızca ham asset'i tutar. CSP nonce her istekte yeniden üretilir.
+      ctx.waitUntil(cache.put(request, response.clone()));
+    }
+    return htmlWithSecurity(response);
   }
 };
