@@ -7,7 +7,7 @@ KODU NASIL KONTROL EDERİM?
 1. ZIP dosyasını Windows'ta sağ tıklayıp “Tümünü ayıkla” ile bir klasöre çıkarın.
 2. Node.js kurulu değilse https://nodejs.org adresinden LTS sürümünü kurun. Kurulum seçeneklerini değiştirmeden ilerleyebilirsiniz.
 3. Çıkardığınız klasörde TESTI-CALISTIR.bat dosyasına çift tıklayın.
-4. “13 tests” ve “pass 13” satırlarını görürseniz otomatik kod testleri geçmiştir. Pencereyi kapatmadan önce sonucu not edin.
+4. “15 tests” ve “pass 15” satırlarını görürseniz otomatik kod testleri geçmiştir. Pencereyi kapatmadan önce sonucu not edin.
 
 Bu testler Worker uçlarını, JavaScript sözdizimini, PWA simgelerini ve bazı güvenlik yanıtlarını denetler. Gerçek Supabase hesabınıza giriş yapmaz, gerçek Cloudflare yayını yapmaz ve canlı içerik göndermez.
 
@@ -18,7 +18,7 @@ Bu adımlar, siteniz Cloudflare'da yayımlandıktan ve Supabase ayarları bağla
 3. Sayfadaki uyarıyı okuyun. “Canlı sistemi test et” düğmesine basıp onay verince test başlar.
 4. Sonuçta başarılı, hatalı ve güvenli şekilde atlanan kontroller ile varsa hata açıklaması görünür. Sonuç ekranının görüntüsünü veya hata metnini buraya gönderin; birlikte yorumlayalım.
 
-Bu canlı test, Supabase'e bir adet açıkça otomatik test olarak işaretlenmiş geçici iletişim mesajı yazar. Yönetici hesabıyla kaydı doğrular, anonim kullanıcıların okuyamadığını kontrol eder ve test sonunda silmeyi doğrular. Ayrıca yönetim hesabının tablo erişimlerini, herkese açık okumaları, RLS güvenlik sınırlarını, site uçlarını ve yapılandırılmış bazı özellikleri kontrol eder. Geçici test kayıtları ve değiştirdiği ayarlar geri alınır. Portalın Telegram ve yapay zekâ çağrıları çalıştırılmaz. Ancak Supabase projenize ayrıca kendi tetikleyici veya webhook'unuzu bağladıysanız, veritabanına mesaj eklenmesi onu çalıştırabilir. Bu nedenle ekrandaki uyarıyı okuyup yalnızca bu testi çalıştırmaya hazır olduğunuzda onaylayın.
+Bu canlı test, Supabase'e bir adet açıkça otomatik test olarak işaretlenmiş geçici iletişim mesajı yazar. Yönetici hesabıyla kaydı doğrular, anonim kullanıcıların okuyamadığını kontrol eder ve test sonunda silmeyi doğrular. Ayrıca yönetim hesabının tablo erişimlerini, herkese açık okumaları, RLS güvenlik sınırlarını, site uçlarını ve yapılandırılmış bazı özellikleri kontrol eder. SEO kontrolü güvenlik nedeniyle siteyi çerçeveye almaya çalışmaz; metadata üreticisini geçici olarak çalıştırır, çıktıyı doğrular ve sayfa başlığını/metadata durumunu geri yükler. Telegram ve Gemini işlevlerinin erişimini Worker üzerinden güvenli OPTIONS isteğiyle kontrol eder. Ardından iki ayrı onay sorulur: Telegram onayı verirseniz gerçek bir test mesajı gönderilir; Gemini onayı verirseniz küçük bir test çağrısı yapılır ve Gemini kotası kullanabilir. İki isteği de reddederseniz testler SKIP olarak raporlanır. Supabase projenize kendi veritabanı tetikleyici veya webhook'unuzu bağladıysanız, iletişim test kaydı eklenmesi onu çalıştırabilir. Ekrandaki uyarıyı okuyup yalnızca testi çalıştırmaya hazır olduğunuzda onaylayın.
 
 `TESTI-CALISTIR.bat` bilgisayarınızdaki kodu denetler; canlı Supabase testi değildir. Canlı test, yayımlanmış sitede yönetici oturumuyla çalıştırılır.
 

@@ -14,6 +14,7 @@
       "/",
       "/index.html",
       "/healthz",
+      "/healthz/integrations",
       "/robots.txt",
       "/sitemap.xml",
       "/feed.xml",

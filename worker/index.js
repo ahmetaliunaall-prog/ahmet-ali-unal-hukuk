@@ -204,6 +204,33 @@ function headResponse(response) {
   return new Response(null, { status: response.status, statusText: response.statusText, headers: response.headers });
 }
 
+async function probeEdgeFunction(name) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort('Supabase function probe timed out'), 8_000);
+  try {
+    const response = await fetch(`${SUPABASE_URL}/functions/v1/${encodeURIComponent(name)}`, {
+      method: 'OPTIONS',
+      headers: { apikey: SUPABASE_PUBLISHABLE_KEY },
+      signal: controller.signal
+    });
+    return { reachable: response.ok, status: response.status };
+  } catch (error) {
+    return { reachable: false, status: null, error: error?.name === 'AbortError' ? 'timeout' : 'network_error' };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function integrationHealth() {
+  const [telegram, ai] = await Promise.all([
+    probeEdgeFunction('telegram-notify'),
+    probeEdgeFunction('ai-assistant')
+  ]);
+  return new Response(JSON.stringify({ ok: true, integrations: { telegram, ai } }), {
+    headers: { 'content-type': 'application/json; charset=UTF-8', 'cache-control': 'no-store' }
+  });
+}
+
 export default {
   async scheduled(controller, env, ctx) {
     ctx.waitUntil(runSeoAutopilot(env).catch(error => console.error('SEO autopilot failed', error)));
@@ -231,6 +258,8 @@ export default {
       }), {
         headers: { 'content-type': 'application/json; charset=UTF-8', 'cache-control': 'no-store' }
       });
+    } else if (url.pathname === '/healthz/integrations') {
+      response = await integrationHealth();
     } else {
       response = await env.ASSETS.fetch(request);
       if (response.status === 404 && request.method === 'GET' && !url.pathname.includes('.')) {

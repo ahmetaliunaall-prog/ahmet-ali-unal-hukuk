@@ -74,11 +74,27 @@ test('admin live test safely probes a real Supabase contact insert and cleanup',
   assert.match(html, /async function insertContactMessage\(client,data\)/);
   assert.match(html, /İletişim formu Supabase testi/);
   assert.match(html, /anonymousClient\.from\(CONFIG\.TABLES\.contact\)\.select\('id'\)/);
-  assert.match(html, /Portalın Telegram bildirimi çağrılmaz/);
-  assert.match(html, /AI ve dış mesaj gönderimleri otomatik yapılmaz/);
   assert.match(html, /else if\(item\.filters&&Object\.keys\(item\.filters\)\.length\)/);
   assert.match(html, /JSON\.stringify\(x\.filters\|\|\{\}\)/);
   assert.match(html, /anonymousClient\.from\(CONFIG\.TABLES\.articles\)\.insert\(probe\)/);
+});
+
+test('live SEO check uses the public page and integrations are probed without side effects', async () => {
+  const html = await readFile(new URL('../public/index.html', import.meta.url), 'utf8');
+  assert.match(html, /setMeta\(\{title:'SEO kontrolü'/);
+  assert.match(html, /jsonLd:baseJsonLd\(\)/);
+  assert.match(html, /JSON\.parse\(jsonld\.textContent\)/);
+  assert.match(html, /fetch\('\/healthz\/integrations'/);
+  assert.match(html, /telegram-notify endpointi erişilebilir/);
+  assert.match(html, /ai-assistant endpointi erişilebilir/);
+  assert.match(html, /Gemini kotası kullanabilir/);
+  assert.match(html, /Telegram onayı tek gerçek test mesajı yollar/);
+  assert.match(html, /Telegram bağlantısını gerçekten denetlemek/);
+  assert.match(html, /Gemini bağlantısını gerçekten denetlemek/);
+  assert.match(html, /sb\.functions\.invoke\(CONFIG\.TELEGRAM_FUNCTION/);
+  assert.match(html, /sb\.functions\.invoke\(CONFIG\.AI_FUNCTION/);
+  assert.doesNotMatch(html, /skip\('Telegram gerçek mesaj gönderimi'/);
+  assert.doesNotMatch(html, /skip\('Gemini gerçek çağrısı'/);
 });
 
 test('PWA manifest includes valid 192 and 512 pixel install icons', async () => {
@@ -114,6 +130,25 @@ test('health endpoint reports the Worker without pretending to probe Supabase', 
   assert.equal(result.dependencies.supabase, 'not_checked');
   assert.equal(response.headers.get('cache-control'), 'no-store');
   assert.ok(response.headers.get('content-security-policy'));
+});
+
+test('integration health endpoint probes Edge Function OPTIONS without invoking providers', async () => {
+  const methods = [];
+  globalThis.fetch = async (input, init) => {
+    const url = new URL(input);
+    assert.equal(url.hostname, 'ztkopywelwximjiopdci.supabase.co');
+    methods.push([url.pathname, init.method]);
+    return new Response(null, { status: 204 });
+  };
+  const response = await worker.fetch(new Request('https://portal.example/healthz/integrations'), { ASSETS: {} });
+  const result = await response.json();
+  assert.equal(response.status, 200);
+  assert.equal(result.integrations.telegram.reachable, true);
+  assert.equal(result.integrations.ai.reachable, true);
+  assert.deepEqual(methods.map(([path]) => path).sort(), [
+    '/functions/v1/ai-assistant', '/functions/v1/telegram-notify'
+  ]);
+  assert.ok(methods.every(([, method]) => method === 'OPTIONS'));
 });
 
 test('unsupported methods are rejected before reaching assets or APIs', async () => {
