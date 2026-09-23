@@ -7,6 +7,10 @@ function xmlEscape(v='') {
   return String(v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&apos;');
 }
 function absolute(base, path='') { return new URL(path, base).href; }
+function safeIso(value, fallback) {
+  const d = value ? new Date(value) : null;
+  return d && !Number.isNaN(d.getTime()) ? d.toISOString() : fallback;
+}
 function nonce() {
   const bytes = crypto.getRandomValues(new Uint8Array(16));
   return btoa(String.fromCharCode(...bytes)).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
@@ -26,7 +30,7 @@ function securityHeaders(n) {
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
       "font-src 'self' https://fonts.gstatic.com data:",
       "img-src 'self' data: blob: https:",
-      "connect-src 'self' https://*.supabase.co https://www.google-analytics.com https://analytics.google.com https://www.googletagmanager.com",
+      "connect-src 'self' https://*.supabase.co https://www.google-analytics.com https://analytics.google.com https://www.googletagmanager.com https://news.google.com",
       "frame-src 'none'",
       "object-src 'none'",
       "base-uri 'self'",
@@ -63,9 +67,9 @@ async function sitemap(request) {
     { loc: origin + '/sss', lastmod: now },
     { loc: origin + '/hakkimda', lastmod: now },
     { loc: origin + '/iletisim', lastmod: now },
-    ...articles.map(a => ({ loc: origin + '/makale/' + encodeURIComponent(a.slug), lastmod: a.updated_at || a.published_at || now })),
-    ...cases.map(a => ({ loc: origin + '/ictihat/' + encodeURIComponent(a.id), lastmod: a.updated_at || a.decision_date || now })),
-    ...terms.map(a => ({ loc: origin + '/sozluk/' + encodeURIComponent(a.id), lastmod: a.updated_at || now }))
+    ...articles.map(a => ({ loc: origin + '/makale/' + encodeURIComponent(a.slug), lastmod: safeIso(a.updated_at || a.published_at, now) })),
+    ...cases.map(a => ({ loc: origin + '/ictihat/' + encodeURIComponent(a.id), lastmod: safeIso(a.updated_at || a.decision_date, now) })),
+    ...terms.map(a => ({ loc: origin + '/sozluk/' + encodeURIComponent(a.id), lastmod: safeIso(a.updated_at, now) }))
   ];
   const body = `<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${rows.map(x=>`<url><loc>${xmlEscape(x.loc)}</loc><lastmod>${new Date(x.lastmod).toISOString()}</lastmod></url>`).join('')}</urlset>`;
   return new Response(body,{headers:{'content-type':'application/xml; charset=UTF-8','cache-control':'public, max-age=300, s-maxage=300'} });
@@ -105,21 +109,14 @@ export default {
     if (url.pathname === '/healthz') {
       return new Response(JSON.stringify({ok:true,service:'hukuk-portal',time:new Date().toISOString()}),{headers:{'content-type':'application/json; charset=UTF-8',...securityHeaders('health')}});
     }
-    const cache = caches.default;
-    const cacheable = request.method === 'GET' && ['/', '/index.html'].includes(url.pathname);
-    /* Cache only the raw static asset. CSP nonce is generated per request, so a nonce-bearing HTML response
-       must never be stored in the shared cache and replayed with a different CSP header. */
-    if(cacheable){
-      const hit = await cache.match(request);
-      if(hit) return htmlWithSecurity(hit);
-    }
+    /* HTML is dynamic at the deployment level (new builds + CSP nonce), so do not
+       serve an indefinitely stale Worker cache entry. Static Assets already has
+       its own immutable asset caching strategy. */
     let response = await env.ASSETS.fetch(request);
     if (response.status === 404 && request.method === 'GET' && !url.pathname.includes('.')) {
       response = await env.ASSETS.fetch(new Request(new URL('/index.html', request.url), request));
     }
-    if(cacheable && response.ok){
-      ctx.waitUntil(cache.put(request, response.clone()));
-    }
-    return htmlWithSecurity(response);
+    const secured = await htmlWithSecurity(response);
+    return secured;
   }
 };

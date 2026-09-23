@@ -1,0 +1,79 @@
+AUDIT PRO MAX — Ahmet Ali Ünal Hukuk Portalı
+Tarih: 2026-09-23
+
+KAPSAM
+- worker/index.js
+- public/index.html
+- public/sw.js
+- public/manifest.webmanifest
+- wrangler.json
+- README-DEPLOY.txt
+- PWA ikonları
+
+TESPİT EDİLEN VE DÜZELTİLEN KRİTİK SORUNLAR
+
+1) CROSS-IIFE SCOPE HATASI — DÜZELTİLDİ
+Sonradan eklenen FINAL EXPERIENCE / FINAL PRODUCT katmanları, ana IIFE içinde tanımlanan
+featureEnabled, featureMap, currentUxItem, uxSaved, siteName, globalSearch, openModal,
+toggleReadingMode, notify ve safeHref gibi fonksiyonlara doğrudan erişiyordu.
+Bu tarayıcıda gerçek "ReferenceError: featureEnabled is not defined" üretiyordu.
+Çözüm: kontrollü window API bridge eklendi.
+
+2) CLOUDFLARE WORKER ROUTE GÜVENLİK KAPSAMI — DÜZELTİLDİ
+/ ve /admin rotaları Worker-first listesinde değildi. Bu durumda Static Assets SPA
+fallback bazı HTML yanıtlarını Worker güvenlik katmanından geçirmeden sunabilirdi.
+/, /index.html, /admin ve /admin/* Worker-first kapsamına alındı.
+
+3) WORKER HTML CACHE — DÜZELTİLDİ
+Ana HTML için süresiz Worker cache kullanılıyordu. Yeni deployment sonrası eski index.html
+cache'ten gelebiliyordu. HTML Worker cache kaldırıldı; Static Assets'in kendi cache
+mekanizmasına bırakıldı.
+
+4) SERVICE WORKER STALE HTML — DÜZELTİLDİ
+Eski SW aynı cache adını koruyarak cache-first HTML sunuyordu. Deploy sonrası kullanıcı
+eski siteyi görmeye devam edebilirdi.
+- Cache sürümü v2 yapıldı.
+- Eski portal cache'leri activate aşamasında siliniyor.
+- HTML navigation network-first.
+- Network yoksa index.html cache fallback.
+
+5) SITEMAP GEÇERSİZ TARİH DAYANIKLILIĞI — DÜZELTİLDİ
+Geçersiz updated_at / decision_date değeri sitemap üretiminde toISOString() hatasına
+yol açabiliyordu. safeIso() ile güvenli fallback eklendi.
+
+6) CSP / GOOGLE PREFERRED SOURCE BAĞLANTISI — DÜZELTİLDİ
+news.google.com script kaynağı CSP'de vardı ancak connect-src içinde yoktu. connect-src
+kapsamına eklendi.
+
+7) FAVICON / PWA — İYİLEŞTİRİLDİ
+- favicon_url ayarı metadata üretiminde artık gerçek favicon'a uygulanıyor.
+- 192x192 ve 512x512 PWA ikonları eklendi.
+- manifest icons tanımlandı.
+- favicon ve apple-touch-icon bağlantıları eklendi.
+
+DOĞRULAMALAR
+- index.html inline JavaScript: node --check PASS
+- worker/index.js: node --check PASS
+- Mock Supabase browser smoke-test: PASS
+- Ana sayfa render: PASS
+- /makaleler: PASS
+- /ictihatlar: PASS
+- /sozluk: PASS
+- /sss: PASS
+- /hakkimda: PASS
+- /iletisim: PASS
+- #makale/... detail route: PASS
+- Kaydetme UX: PASS
+- Erişilebilirlik paneli açılışı: PASS
+- Tema / UX katmanı scope testi: PASS
+
+SINIRLAR
+Bu audit ortamından gerçek Supabase/Cloudflare/Gemini/Telegram uç noktalarına DNS/ağ erişimi
+yoktu. Bu nedenle canlı Edge Function, RLS ve gerçek admin CRUD işlemlerinin uzaktaki
+deployment üzerindeki sonucunu burada dürüstçe doğrulayamıyorum. Paket içindeki "Canlı Sistem
+Testi" bu amaçla korunmuştur; deploy sonrası admin hesabıyla çalıştırılmalıdır.
+
+ÖNEMLİ NOT
+ZIP içinde Supabase SQL/RLS migration dosyaları bulunmadığı için veritabanı şemasını
+tahmin ederek değiştirmedim. Bu, mevcut çalışan Supabase yapısını bozma riskini önlemek için
+bilinçli bir tercihtir.
